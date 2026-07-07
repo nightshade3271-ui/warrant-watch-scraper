@@ -6,5 +6,8 @@
   "dependencies": {
     "@sparticuz/chromium-min": "119.0.2",
     "puppeteer-core": "21.6.0"
+  },
+  "engines": {
+    "node": "18.x"
   }
 }
