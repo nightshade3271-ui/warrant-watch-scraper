@@ -30,22 +30,12 @@ module.exports = async (req, res) => {
       ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' // Local Chrome path for Windows testing
       : await chromium.executablePath();
 
-    const path = require('path');
-    const execDir = isLocal ? '' : path.dirname(executablePath);
-    if (!isLocal) {
-      process.env.LD_LIBRARY_PATH = execDir;
-    }
-
     browser = await puppeteer.launch({
       args: isLocal ? [] : chromium.args,
       defaultViewport: chromium.defaultViewport,
       executablePath,
       headless: isLocal ? true : chromium.headless,
-      ignoreHTTPSErrors: true,
-      env: {
-        ...process.env,
-        LD_LIBRARY_PATH: isLocal ? process.env.LD_LIBRARY_PATH : execDir
-      }
+      ignoreHTTPSErrors: true
     });
 
     const page = await browser.newPage();
