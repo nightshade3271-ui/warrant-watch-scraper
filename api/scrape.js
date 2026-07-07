@@ -44,7 +44,104 @@ module.exports = async (req, res) => {
     const isOdyssey = (platform && platform.toLowerCase().includes('odyssey')) || 
                       (url && url.toLowerCase().includes('tylerhost.net'));
 
-    if (isOdyssey && url) {
+    const isOcis = (platform && platform.toLowerCase().includes('ocis')) || 
+                    (url && url.toLowerCase().includes('eapps.courts.state.va.us'));
+
+    if (isOcis && url) {
+      console.log(`Navigating to Virginia OCIS landing: ${url}`);
+      await page.goto(url, { waitUntil: 'networkidle2', timeout: 25000 });
+
+      // Handle terms accept button
+      try {
+        await page.waitForSelector('button, input[type="button"], input[type="submit"]', { timeout: 5000 });
+        const accepted = await page.evaluate(() => {
+          const buttons = Array.from(document.querySelectorAll('button, input[type="button"], input[type="submit"]'));
+          const btn = buttons.find(b => (b.innerText || b.value || '').toLowerCase().includes('accept') || (b.innerText || b.value || '').toLowerCase().includes('agree'));
+          if (btn) {
+            btn.click();
+            return true;
+          }
+          return false;
+        });
+        if (accepted) {
+          console.log('EULA accepted.');
+          await new Promise(resolve => setTimeout(resolve, 1500));
+        }
+      } catch (e) {
+        console.log('No EULA landing button found or already bypassed:', e.message);
+      }
+
+      // Enter name details in OCIS search page
+      console.log('Entering search query details...');
+      
+      const firstSelector = await Promise.race([
+        page.waitForSelector('#firstName', { timeout: 8000 }).then(() => '#firstName'),
+        page.waitForSelector('input[formcontrolname="firstName"]', { timeout: 8000 }).then(() => 'input[formcontrolname="firstName"]'),
+        page.waitForSelector('input[placeholder*="First Name"]', { timeout: 8000 }).then(() => 'input[placeholder*="First Name"]'),
+        page.waitForSelector('input[aria-label*="First Name"]', { timeout: 8000 }).then(() => 'input[aria-label*="First Name"]')
+      ]);
+
+      const lastSelector = await Promise.race([
+        page.waitForSelector('#lastName', { timeout: 8000 }).then(() => '#lastName'),
+        page.waitForSelector('input[formcontrolname="lastName"]', { timeout: 8000 }).then(() => 'input[formcontrolname="lastName"]'),
+        page.waitForSelector('input[placeholder*="Last Name"]', { timeout: 8000 }).then(() => 'input[placeholder*="Last Name"]'),
+        page.waitForSelector('input[aria-label*="Last Name"]', { timeout: 8000 }).then(() => 'input[aria-label*="Last Name"]')
+      ]);
+
+      await page.type(firstSelector, first.trim());
+      await page.type(lastSelector, last.trim());
+
+      // Click search button
+      const searchBtnSelector = await Promise.race([
+        page.waitForSelector('button[type="submit"]', { timeout: 5000 }).then(() => 'button[type="submit"]'),
+        page.waitForSelector('button[id*="search"]', { timeout: 5000 }).then(() => 'button[id*="search"]'),
+        page.waitForSelector('.search-button', { timeout: 5000 }).then(() => '.search-button'),
+        page.waitForSelector('button[aria-label*="Search"]', { timeout: 5000 }).then(() => 'button[aria-label*="Search"]')
+      ]);
+
+      console.log(`Clicking Search button: ${searchBtnSelector}`);
+      await page.click(searchBtnSelector);
+
+      // Wait for search results
+      console.log('Waiting for search results...');
+      await page.waitForSelector('table, .search-results, td, a[href*="case"], .no-records', { timeout: 15000 });
+
+      // Parse OCIS search results
+      const cases = await page.evaluate((courtName) => {
+        const rows = Array.from(document.querySelectorAll('tr, .case-row, .search-result-item'));
+        if (rows.length === 0) return [];
+        
+        return rows.map(row => {
+          const cells = Array.from(row.querySelectorAll('td, div.cell, .col'));
+          if (cells.length < 3) return null;
+          
+          const caseNum = cells[0].innerText.trim();
+          const name = cells[1] ? cells[1].innerText.trim() : 'Subject Record';
+          const charge = cells[2] ? cells[2].innerText.trim() : 'Court Case Record';
+          let status = 'CLOSED';
+          
+          cells.forEach(cell => {
+            const cellText = cell.innerText.trim().toLowerCase();
+            if (cellText === 'open' || cellText === 'active' || cellText === 'pending') {
+              status = 'OPEN';
+            }
+          });
+
+          return {
+            case_number: caseNum,
+            court: courtName || 'Virginia General District/Circuit Court',
+            charge: charge,
+            name: name,
+            dob: '',
+            status: status,
+            warrant: 'No'
+          };
+        }).filter(Boolean);
+      }, req.query.court);
+
+      console.log(`Virginia OCIS scrape finished. Found ${cases.length} cases.`);
+      return res.status(200).json({ success: true, data: cases });
+    } else if (isOdyssey && url) {
       console.log(`Navigating to Tyler Odyssey Portal: ${url}`);
       await page.goto(url, { waitUntil: 'networkidle2', timeout: 25000 });
 
