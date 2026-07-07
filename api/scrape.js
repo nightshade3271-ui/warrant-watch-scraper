@@ -97,12 +97,7 @@ module.exports = async (req, res) => {
     return res.status(200).json({ success: true, data: cases });
   } catch (error) {
     console.error('Serverless Scraper Exception:', error.message);
-    return res.status(500).json({ 
-      success: false, 
-      error: error.message,
-      nodeVersion: process.version,
-      lambdaRuntime: process.env.AWS_LAMBDA_JS_RUNTIME || 'not_set'
-    });
+    return res.status(500).json({ success: false, error: error.message });
   } finally {
     if (browser) {
       await browser.close();
