@@ -30,7 +30,7 @@ module.exports = async (req, res) => {
       defaultViewport: chromium.defaultViewport,
       executablePath: isLocal 
         ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' // Local Chrome path for Windows testing
-        : await chromium.executablePath('https://github.com/Sparticuz/chromium/releases/download/v119.0.2/chromium-v119.0.2-pack.tar'),
+        : await chromium.executablePath('https://github.com/Sparticuz/chromium/releases/download/v123.0.0/chromium-v123.0.0-pack.tar'),
       headless: isLocal ? true : chromium.headless,
       ignoreHTTPSErrors: true,
     });
