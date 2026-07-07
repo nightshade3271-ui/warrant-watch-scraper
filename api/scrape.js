@@ -1,5 +1,5 @@
 process.env.AWS_LAMBDA_JS_RUNTIME = 'nodejs22.x';
-const chromium = require('@sparticuz/chromium-min');
+const chromium = require('@sparticuz/chromium');
 const puppeteer = require('puppeteer-core');
 
 module.exports = async (req, res) => {
@@ -28,7 +28,7 @@ module.exports = async (req, res) => {
     
     const executablePath = isLocal 
       ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' // Local Chrome path for Windows testing
-      : await chromium.executablePath('https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar');
+      : await chromium.executablePath();
 
     const path = require('path');
     const execDir = isLocal ? '' : path.dirname(executablePath);
