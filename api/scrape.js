@@ -1,4 +1,4 @@
-const chromium = require('@sparticuz/chromium');
+const chromium = require('@sparticuz/chromium-min');
 const puppeteer = require('puppeteer-core');
 
 module.exports = async (req, res) => {
@@ -25,23 +25,12 @@ module.exports = async (req, res) => {
   try {
     const isLocal = process.env.NODE_ENV === 'development';
     
-    if (!isLocal && typeof chromium.setGraphicsMode === 'function') {
-      chromium.setGraphicsMode(false);
-    }
-
-    const executablePath = isLocal 
-      ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' // Local Chrome path for Windows testing
-      : await chromium.executablePath();
-
-    if (!isLocal) {
-      const path = require('path');
-      process.env.LD_LIBRARY_PATH = path.dirname(executablePath);
-    }
-    
     browser = await puppeteer.launch({
       args: isLocal ? [] : chromium.args,
       defaultViewport: chromium.defaultViewport,
-      executablePath,
+      executablePath: isLocal 
+        ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' // Local Chrome path for Windows testing
+        : await chromium.executablePath('https://github.com/Sparticuz/chromium/releases/download/v119.0.2/chromium-v119.0.2-pack.tar'),
       headless: isLocal ? true : chromium.headless,
       ignoreHTTPSErrors: true,
     });
