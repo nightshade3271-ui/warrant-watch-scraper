@@ -296,8 +296,133 @@ module.exports = async (req, res) => {
       return res.status(200).json({ success: true, data: cases });
     }
   } catch (error) {
-    console.error('Serverless Scraper Exception:', error.message);
-    return res.status(500).json({ success: false, error: error.message });
+    // If specific platform logic fails or this is an unsupported platform, fall back to our resilient general form crawler
+    try {
+      console.log(`Attempting resilient general form scraping fallback for URL: ${req.query.url}`);
+      const page = await browser.newPage();
+      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+      await page.goto(req.query.url, { waitUntil: 'networkidle2', timeout: 25000 });
+
+      // Resilient Disclaimer Acceptance
+      try {
+        const acceptBtn = await page.evaluate(() => {
+          const buttons = Array.from(document.querySelectorAll('button, input[type="button"], input[type="submit"], a'));
+          const btn = buttons.find(b => {
+            const text = (b.innerText || b.value || '').toLowerCase();
+            return text.includes('accept') || text.includes('agree') || text.includes('continue') || text.includes('i accept') || text.includes('acknowledge');
+          });
+          if (btn) {
+            btn.click();
+            return true;
+          }
+          return false;
+        });
+        if (acceptBtn) {
+          console.log('Disclaimer accepted via general handler.');
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      } catch (e) {
+        console.log('No general disclaimer found or error accepting:', e.message);
+      }
+
+      // If we are on a landing page, try to find a "Search" or "Inquiry" link to click
+      if (page.url() === req.query.url) {
+        try {
+          const searchLink = await page.evaluate(() => {
+            const links = Array.from(document.querySelectorAll('a'));
+            const link = links.find(l => {
+              const text = (l.innerText || '').toLowerCase();
+              return text.includes('case search') || text.includes('public inquiry') || text.includes('name search') || text.includes('smart search') || text.includes('case inquiry') || text.includes('general inquiry');
+            });
+            if (link) {
+              link.click();
+              return true;
+            }
+            return false;
+          });
+          if (searchLink) {
+            console.log('Navigated to search section.');
+            await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 8000 }).catch(() => {});
+          }
+        } catch (e) {
+          console.log('Error searching for case search links:', e.message);
+        }
+      }
+
+      // Wait and locate Name fields using resilient race condition
+      const firstSelector = await Promise.race([
+        page.waitForSelector('#firstName', { timeout: 8000 }).then(() => '#firstName'),
+        page.waitForSelector('#txtFirstName', { timeout: 8000 }).then(() => '#txtFirstName'),
+        page.waitForSelector('input[name*="first"]', { timeout: 8000 }).then(() => 'input[name*="first"]'),
+        page.waitForSelector('input[placeholder*="First"]', { timeout: 8000 }).then(() => 'input[placeholder*="First"]')
+      ]);
+
+      const lastSelector = await Promise.race([
+        page.waitForSelector('#lastName', { timeout: 8000 }).then(() => '#lastName'),
+        page.waitForSelector('#txtLastName', { timeout: 8000 }).then(() => '#txtLastName'),
+        page.waitForSelector('input[name*="last"]', { timeout: 8000 }).then(() => 'input[name*="last"]'),
+        page.waitForSelector('input[placeholder*="Last"]', { timeout: 8000 }).then(() => 'input[placeholder*="Last"]')
+      ]);
+
+      console.log(`Typing name queries in: ${firstSelector} and ${lastSelector}`);
+      await page.type(firstSelector, first.trim());
+      await page.type(lastSelector, last.trim());
+
+      // Click search/submit button
+      const submitSelector = await Promise.race([
+        page.waitForSelector('#btnSearch', { timeout: 5000 }).then(() => '#btnSearch'),
+        page.waitForSelector('#btnSubmit', { timeout: 5000 }).then(() => '#btnSubmit'),
+        page.waitForSelector('input[type="submit"]', { timeout: 5000 }).then(() => 'input[type="submit"]'),
+        page.waitForSelector('button[type="submit"]', { timeout: 5000 }).then(() => 'button[type="submit"]'),
+        page.waitForSelector('.search-button', { timeout: 5000 }).then(() => '.search-button')
+      ]);
+
+      console.log(`Clicking search button: ${submitSelector}`);
+      await page.click(submitSelector);
+
+      // Wait for results
+      console.log('Waiting for search results...');
+      await page.waitForSelector('table, tr, td, .search-results, .no-records', { timeout: 15000 });
+
+      // Parse results
+      const cases = await page.evaluate((courtName) => {
+        const rows = Array.from(document.querySelectorAll('tr, .case-row'));
+        if (rows.length === 0) return [];
+
+        return rows.map(row => {
+          const cells = Array.from(row.querySelectorAll('td, th'));
+          if (cells.length < 3) return null;
+
+          const caseNum = cells[0].innerText.trim();
+          const name = cells[1] ? cells[1].innerText.trim() : 'Subject Record';
+          const charge = cells[2] ? cells[2].innerText.trim() : 'Court Case Record';
+          let status = 'CLOSED';
+
+          cells.forEach(cell => {
+            const txt = cell.innerText.trim().toLowerCase();
+            if (txt === 'open' || txt === 'active' || txt === 'pending') {
+              status = 'OPEN';
+            }
+          });
+
+          return {
+            case_number: caseNum,
+            court: courtName || 'Court of Common Pleas',
+            charge: charge,
+            name: name,
+            dob: '',
+            status: status,
+            warrant: 'No'
+          };
+        }).filter(Boolean);
+      }, req.query.court);
+
+      console.log(`General scrape fallback finished. Found ${cases.length} cases.`);
+      return res.status(200).json({ success: true, data: cases });
+    } catch (fallbackError) {
+      console.error('General Scrape Fallback Exception:', fallbackError.message);
+      return res.status(500).json({ success: false, error: `${error.message} (Fallback: ${fallbackError.message})` });
+    }
   } finally {
     if (browser) {
       await browser.close();
