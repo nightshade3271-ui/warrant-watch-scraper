@@ -4,7 +4,7 @@
   "description": "Puppeteer serverless scraper for Warrant Watch",
   "main": "api/scrape.js",
   "dependencies": {
-    "@sparticuz/chromium-min": "^119.0.2",
-    "puppeteer-core": "^21.6.0"
+    "@sparticuz/chromium": "119.0.2",
+    "puppeteer-core": "21.6.0"
   }
 }
