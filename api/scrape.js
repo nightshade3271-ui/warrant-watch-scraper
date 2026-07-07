@@ -25,14 +25,26 @@ module.exports = async (req, res) => {
   try {
     const isLocal = process.env.NODE_ENV === 'development';
     
+    const executablePath = isLocal 
+      ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' // Local Chrome path for Windows testing
+      : await chromium.executablePath('https://github.com/Sparticuz/chromium/releases/download/v123.0.0/chromium-v123.0.0-pack.tar');
+
+    const path = require('path');
+    const execDir = isLocal ? '' : path.dirname(executablePath);
+    if (!isLocal) {
+      process.env.LD_LIBRARY_PATH = execDir;
+    }
+
     browser = await puppeteer.launch({
       args: isLocal ? [] : chromium.args,
       defaultViewport: chromium.defaultViewport,
-      executablePath: isLocal 
-        ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' // Local Chrome path for Windows testing
-        : await chromium.executablePath('https://github.com/Sparticuz/chromium/releases/download/v123.0.0/chromium-v123.0.0-pack.tar'),
+      executablePath,
       headless: isLocal ? true : chromium.headless,
       ignoreHTTPSErrors: true,
+      env: {
+        ...process.env,
+        LD_LIBRARY_PATH: isLocal ? process.env.LD_LIBRARY_PATH : execDir
+      }
     });
 
     const page = await browser.newPage();
