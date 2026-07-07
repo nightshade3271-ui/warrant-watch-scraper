@@ -27,7 +27,7 @@ module.exports = async (req, res) => {
     
     const executablePath = isLocal 
       ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' // Local Chrome path for Windows testing
-      : await chromium.executablePath('https://github.com/Sparticuz/chromium/releases/download/v123.0.0/chromium-v123.0.0-pack.tar');
+      : await chromium.executablePath('https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar');
 
     const path = require('path');
     const execDir = isLocal ? '' : path.dirname(executablePath);
@@ -55,7 +55,7 @@ module.exports = async (req, res) => {
 
     // Accept disclaimer modal if present
     try {
-      const acceptBtn = await page.waitForSelector('button[onclick="acceptDisclaimer()"]', { timeout: 3000 });
+      const acceptBtn = await page.waitForSelector('button[onclick*="acceptDisclaimer"]', { timeout: 3000 });
       if (acceptBtn) {
         await acceptBtn.click();
         console.log('Disclaimer accepted.');
@@ -86,7 +86,7 @@ module.exports = async (req, res) => {
 
     // Parse the records table
     const cases = await page.evaluate(() => {
-      const rows = Array.from(document.querySelectorAll('#Results table tbody tr'));
+      const rows = Array.from(document.querySelectorAll('#tblSearchResults tr'));
       return rows.map(row => {
         const cols = Array.from(row.querySelectorAll('td')).map(td => td.innerText.trim());
         if (cols.length < 5) return null;
